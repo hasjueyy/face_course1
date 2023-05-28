@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ZH-CN">
+<head>
+    <meta charset="utf-8">
+    <title>打卡签到</title>
+</head>
+{% load static %}
+<link rel="stylesheet" href="/static/layui/css/layui.css">
+<script type="application/javascript" src="http://www.chewubang.net/static/jquery/jquery-3.2.1.min.js"></script>
+
+<script type="application/javascript" src="/static/layui/layui.all.js"></script>
+
+
+<style>
+</style>
+<body>
+<div class="layui-container">
+
+    <div class="layui-tab layui-tab-brief" lay-filter="docDemoTabBrief">
+        <ul class="layui-tab-title">
+            <li class="layui-this"><a href="/">签到</a></li>
+            <li><a href="/register">注册学生</a></li>
+            <li class=""><a href="/search">签到查询</a></li>
+            <li><a href="/admin/">管理数据库</a></li>
+        </ul>
+        <div class="layui-tab-content"></div>
+    </div>
+
+
+    <div style="text-align: center;border: 1px solid;width: 500px;height: 500px;padding: 10px;float: left">
+        <video width="480" height="480" id="video" style="display:none"></video>
+        <canvas width="480" height="480" id="outputCanvas" style="margin: 0 auto"></canvas>
+    </div>
+
+
+    <form class="layui-form" action="javascript:void(0)" method="post" id="check-form" style="float: right">
+        <div class="layui-form-item">
+            {#            <label class="layui-form-label">选择人脸图片</label>#}
+            <div class="layui-input-inline">
+
+                {#                <b id="_getmediaDevices" class="layui-btn" style="margin-left: 120px;">打开摄像头</b>#}
+                <input type="hidden" name="img" id="input_img">
+            </div>
+
+        </div>
+
+        <input type="hidden" name="method" value="work" id="check_method">
+        <br>
+        <button class="layui-btn getmediaDevices work" style="margin-left: 120px;">开始签到</button>
+        <button class="layui-btn getmediaDevices off-work" style="margin-left: 120px;">开始签退</button>
+
+    </form>
+
+
+    <pre class="layui-code" style="margin-top: 550px;height:300px; " id="logs">
+
+    </pre>
+
+</div>
+<script>
+    window.g_src;
+    layui.use('code', function () { //加载code模块
+        layui.code({
+            title: '运行日志',
+            skin: 'notepad' //如果要默认风格，不用设定该key。
+        }); //引用code方法
+    });
+
+    function onUpload1(file) {
+        var fr = new FileReader();
+        fr.readAsDataURL(file);  // 将文件读取为Data URL
+
+        fr.onload = function (e) {
+            var result = e.target.result;
+            $("#predict-img").attr("src", result);
+            $("#input_img").val(result)
+        }
+    }
+
+    $(".getmediaDevices").click(function () {
+        if ($(this).text().indexOf("开始") != -1) {
+            for (var x = 0; x < 20; x++) {
+                if (window.cv_ok) {
+                    logs($(this).text());
+                    window.check_loop = true;
+                    startCamera();
+                    window.g_src = undefined;
+                    outputCanvas = document.getElementById("outputCanvas");
+
+                    faceCascade = new cv.CascadeClassifier();
+                    faceCascade.load("face.xml");
+                    window.cap = new cv.VideoCapture(video);
+                    window.src = new cv.Mat(videoHeight, videoWidth, cv.CV_8UC4);
+                    window.gray = new cv.Mat(videoHeight, videoWidth, cv.CV_8UC1);
+                    // startCamera();
+                    logs("初始化系统")
+
+                    setTimeout(function () {
+                        requestAnimationFrame(detectFace)
+                    }, 1);
+
+
+                    $(this).text($(this).text().replace(/开始/, "停止"));
+                    if ($(this).hasClass("work")) {
+                        $("#check_method").val("work")
+                    } else {
+                        $("#check_method").val("off-work")
+                    }
+                    setTimeout(upload, 1)
+                    return
+                } else {
+                    sleep(2000)
+                }
+            }
+        } else {
+            logs($(this).text());
+
+            window.check_loop = false
+            $(this).text($(this).text().replace(/停止/, "开始"));
+            streaming.getTracks()[0].stop();
+            streaming = null;
+
+        }
+
+
+    });
+
+    function sleep(d) {
+        for (var t = Date.now(); Date.now() - t <= d;) ;
+    }
+
+    function logs(txt) {
+
+        var ts = $("#logs").text();
+
+        $("#logs").text(new Date() + "   " + txt + "\n" + ts)
+
+    }
+
+    function upload() {
+
+        if (check_loop === false) {
+            return
+        }
+
+
+        if ($("#input_img").val()) {
+            $.ajax({
+                "type": "POST",
+                "url": "/",
+                "data": $("#check-form").serializeArray(),
+                'dataType': 'json',
+                beforeSend: function () {
+                },
+                success: function (result) {
+                    setTimeout(upload, 1);
+                    if (result.code === 200) {
+                        for (var x of result.data) {
+                            logs(x)
+                        }
+
+                    } else {
+                        logs(result.msg)
+                    }
+                }, error: function () {
+                    logs("服务器错误 停止签到");
+                    $(".work").text("开始签到");
+                    $(".off-work").text("开始签退");
+
+
+                }
+            });
+
+        } else {
+            setTimeout(upload, 1)
+        }
+    }
+
+
+</script>
+<script type="application/javascript" src="/static/index_face.js"></script>
+<script type="application/javascript" src="/static/opencv.js"></script>
+
+
+</body>
+</html>
